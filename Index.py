@@ -12,7 +12,7 @@ def init_db():
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
                         title TEXT,
                         date TEXT,
-                        budget_amount REAL,
+                        budget REAL,
                         total_spent REAL,
                         remaining REAL,
                         categories TEXT)''')
@@ -27,12 +27,9 @@ def insert_sample_data():
         sample_data = [
             ("March Budget Summary", "March 31, 2025", 1700.00, 1500.00, 200.00, "Food:500,Transportation:300,Utilities:400,Rent:200,Entertainment:100"),
             ("February Budget Summary", "February 28, 2025", 1500.00, 1200.00, 300.00, "Transportation:500,Food:700"),
-            ("January Budget Summary", "January 31, 2025", 2000.00, 1800.00, 150.00, "Utilities:1000,Food:800"),
-            ("December Budget Summary", "December 31, 2024", 3000.00, 2500.00, 500.00, "Rent:2000,Food:500"),
-            ("November Budget Summary", "November 30, 2024", 2000.00, 1600.00, 400.00, "Entertainment:1000,Food:600"),
-            ("October Budget Summary", "October 31, 2024", 1100.00, 900.00, 200.00, "Other:900")
+            ("January Budget Summary", "January 31, 2025", 2000.00, 1800.00, 150.00, "Utilities:1000,Food:800")
         ]
-        cursor.executemany("INSERT INTO summaries (title, date, budget_amount, total_spent, remaining, categories) VALUES (?, ?, ?, ?, ?, ?)", sample_data)
+        cursor.executemany("INSERT INTO summaries (title, date, budget, total_spent, remaining, categories) VALUES (?, ?, ?, ?, ?, ?)", sample_data)
     conn.commit()
     conn.close()
 
@@ -43,9 +40,9 @@ def load_data(search_query=""):
     conn = sqlite3.connect("budget_history.db")
     cursor = conn.cursor()
     if search_query:
-        cursor.execute("SELECT title, date, budget_amount, total_spent, remaining FROM summaries WHERE title LIKE ?", (f"%{search_query}%",))
+        cursor.execute("SELECT title, date, budget, total_spent, remaining FROM summaries WHERE title LIKE ?", (f"%{search_query}%",))
     else:
-        cursor.execute("SELECT title, date, budget_amount, total_spent, remaining FROM summaries")
+        cursor.execute("SELECT title, date, budget, total_spent, remaining FROM summaries")
     rows = cursor.fetchall()
     conn.close()
     
@@ -62,18 +59,18 @@ def show_pie_chart_for_selection(event):
     
     conn = sqlite3.connect("budget_history.db")
     cursor = conn.cursor()
-    cursor.execute("SELECT budget_amount, categories FROM summaries WHERE title = ?", (title,))
+    cursor.execute("SELECT budget, remaining, categories FROM summaries WHERE title = ?", (title,))
     data = cursor.fetchone()
     conn.close()
     
     if not data:
         return
     
-    budget_amount, categories_string = data
+    budget, remaining, categories_data = data
     category_totals = {}
-    categories = categories_string.split(',')
-    details_text = f"Budget Amount: {budget_amount}\n\n"
-    
+    categories = categories_data.split(',')
+    details_text = f"Budget: {budget}\nRemaining Budget: {remaining}\n\n"
+
     for category in categories:
         name, value = category.split(':')
         value = float(value)
@@ -102,10 +99,26 @@ def search_data():
     query = search_var.get()
     load_data(query)
 
+def delete_selected():
+    selected_item = tree.selection()
+    if not selected_item:
+        return
+
+    item = tree.item(selected_item)
+    title = item['values'][0]
+
+    conn = sqlite3.connect("budget_history.db")
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM summaries WHERE title = ?", (title,))
+    conn.commit()
+    conn.close()
+
+    load_data()
+
 # GUI Setup
 root = tk.Tk()
 root.title("Budget Summary History")
-root.geometry("1000x500")
+root.geometry("900x550")
 root.configure(bg="#6200EA")
 
 header_frame = tk.Frame(root, bg="#6200EA")
@@ -120,15 +133,18 @@ search_entry.pack(pady=5, padx=10, fill="x")
 search_button = ttk.Button(root, text="Search", command=search_data)
 search_button.pack()
 
-tree = ttk.Treeview(root, columns=("Title", "Date", "Budget Amount", "Total Spent", "Remaining"), show="headings")
+tree = ttk.Treeview(root, columns=("Title", "Date", "Budget", "Total Spent", "Remaining"), show="headings")
 tree.heading("Title", text="Title")
 tree.heading("Date", text="Date Completed")
-tree.heading("Budget Amount", text="Budget Amount")
+tree.heading("Budget", text="Budget")
 tree.heading("Total Spent", text="Total Spent")
 tree.heading("Remaining", text="Remaining Budget")
 tree.pack(pady=10, fill="both", expand=True)
 
 tree.bind("<Double-1>", show_pie_chart_for_selection)
+
+delete_button = ttk.Button(root, text="Delete Selected", command=delete_selected)
+delete_button.pack(pady=10)
 
 # Initialize Database
 init_db()
